@@ -1,0 +1,30 @@
+{
+  "name": "@shahadul-17/utilities",
+  "version": "0.0.1",
+  "description": "A collection of utilities for Node.js",
+  "author": "Md. Shahadul Alam Patwary",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shahadul-17/utilities.git"
+  },
+  "keywords": [
+    "utilities"
+  ],
+  "bugs": {
+    "url": "https://github.com/shahadul-17/utilities/issues"
+  },
+  "homepage": "https://github.com/shahadul-17/utilities#readme",
+  "devDependencies": {
+    "@types/node": "^20.4.9",
+    "typescript": "^5.1.6"
+  }
+}
