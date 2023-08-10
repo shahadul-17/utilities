@@ -10,6 +10,7 @@ const DEFAULT_KEYED_HASH_ENCODING = "base64url";
 const DEFAULT_KEYED_HASH_ALGORITHM = "HMACSHA512";
 
 const AES_SALT_LENGTH = 64;
+const AES_KEY_LENGTH = 128;
 const AES_SALT_ENCODING = "ascii";
 const AES_AUTHENTICATION_TAG_LENGTH_SIZE_IN_BYTES = 4;
 const AES_AUTHENTICATION_TAG_LENGTH = 16;
@@ -117,6 +118,18 @@ export class CryptographicUtilities {
     return hash === preComputedHash;
   }
 
+  public static async generateKeyAsync(algorithm: EncryptionAlgorithm): Promise<string> {
+    const algorithmInformation = await this.validateEncryptionAlgorithmAsync(algorithm);
+
+    if (algorithmInformation.isSymmetricKeyedEncryptionAlgorithm) {
+      const key = await this.generateSymmetricKeyAsync(algorithmInformation);
+
+      return key;
+    }
+
+    throw new Error("Unsupported symmetric keyed encryption algorithm provided.");
+  }
+
   public static async encryptAsync(
     plaintext: string | Buffer,
     encryptionKey: string,
@@ -217,6 +230,13 @@ export class CryptographicUtilities {
     try {
       cryptographicServiceProvider.setAuthTag(authenticationTag);
     } catch { }
+  }
+
+  private static async generateSymmetricKeyAsync(
+    algorithmInformation: EncryptionAlgorithmInformation): Promise<string> {
+    const key = RandomGenerator.generateString(AES_KEY_LENGTH);
+
+    return key;
   }
 
   private static async encryptUsingAesAsync(
