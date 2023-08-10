@@ -23,7 +23,7 @@ export class StringUtilities {
   /**
    * Checks if a text is empty.
    * @param text Text that needs to be checked.
-   * @returns True if the text is 'undefined' or 'null'. Otherwise false.
+   * @returns True if the text is empty. Otherwise false.
    */
   public static isEmpty(text: any): boolean {
     // anything other than string is also considered as empty string...

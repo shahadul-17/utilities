@@ -6,3 +6,4 @@ export * from "./file-utilities";
 export * from "./thread-utilities";
 export * from "./date-utilities";
 export * from "./json-serializer";
+export * from "./cryptographic-utilities";
