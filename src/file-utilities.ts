@@ -2,6 +2,8 @@ import path from "path";
 import fileSystem from "fs";
 import asyncFileSystem from "fs/promises";
 import { Stream } from "stream";
+import { JsonSerializer } from "./json-serializer";
+import { ObjectUtilities } from "./object-utilities";
 
 const UNWANTED_FILE_NAME_CHARACTERS_PATTERN = "[/\\?%*:|\"<>!]";
 
@@ -124,6 +126,20 @@ export class FileUtilities {
     return buffer;
   }
 
+  public static async readTextAsync(encoding: BufferEncoding, ...paths: Array<string>): Promise<string> {
+    const buffer = await this.readAsync(...paths);
+    const text = buffer.toString(encoding);
+
+    return text;
+  }
+
+  public static async readJsonAsync<Type>(encoding: BufferEncoding,
+    ...paths: Array<string>): Promise<Type> {
+    const jsonContent = await this.readTextAsync(encoding, ...paths);
+
+    return JsonSerializer.deserialize<Type>(jsonContent);
+  }
+
   public static async writeAsync(data: WritableData,
     shallOverwrite: boolean = false, ...filePaths: Array<string>): Promise<void> {
     const filePath = this.join(...filePaths);
@@ -132,5 +148,17 @@ export class FileUtilities {
     // creates directory if does not exist...
     await this.createDirectoryIfDoesNotExistAsync(directoryPath);
     await asyncFileSystem.writeFile(filePath, data, { flag: shallOverwrite === true ? 'w' : 'a', });
+  }
+
+  public static async writeJsonAsync(data: any,
+    shallOverwrite: boolean = false, ...filePaths: Array<string>): Promise<void> {
+    // if the data is not an array nor an object...
+    if (!Array.isArray(data) && !ObjectUtilities.isObject(data)) {
+      data = ObjectUtilities.getEmptyObject(false);
+    }
+
+    const json = JsonSerializer.serialize(data);
+
+    await this.writeAsync(json, shallOverwrite, ...filePaths);
   }
 }

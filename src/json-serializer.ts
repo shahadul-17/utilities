@@ -24,7 +24,7 @@ export class JsonSerializer {
     return JSON.stringify(sanitizedValue, undefined, options?.spaces);
   }
 
-  public static deserialize(json: string): any {
+  public static deserialize<Type>(json: string): Type {
     return JSON.parse(json);
   }
 }

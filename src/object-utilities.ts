@@ -1,5 +1,7 @@
 import { StringUtilities } from "./string-utilities";
 
+const EMPTY_OBJECT = Object.freeze(createEmptyObject());
+
 type SanitizationOptions = {
   data: any,
   shallDeepSanitize?: boolean,
@@ -14,7 +16,27 @@ type CloningOptions = {
   propertiesToRemove?: Array<string>,
 };
 
+function createEmptyObject() {
+  return Object.create(null);
+}
+
 export class ObjectUtilities {
+
+  /**
+   * This method provides an empty object. If this method shall not create
+   * a new object, it will return a frozen (not modifiable) singleton
+   * instance of an empty object.
+   * @param shallCreateNew If set to true, this method shall create a new
+   * empty object. Otherwise, it shall return a singleton instance of an empty object.
+   * @returns An empty object.
+   */
+  public static getEmptyObject(shallCreateNew: boolean = false): any {
+    if (shallCreateNew === true) {
+      return createEmptyObject();
+    }
+
+    return EMPTY_OBJECT;
+  }
 
   /**
    * Checks if provided value is actually an object.
