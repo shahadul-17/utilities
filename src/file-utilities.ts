@@ -4,6 +4,7 @@ import asyncFileSystem from "fs/promises";
 import { Stream } from "stream";
 import { JsonSerializer } from "./json-serializer";
 import { ObjectUtilities } from "./object-utilities";
+import { StringUtilities } from "./string-utilities";
 
 const UNWANTED_FILE_NAME_CHARACTERS_PATTERN = "[/\\?%*:|\"<>!]";
 
@@ -43,13 +44,13 @@ export class FileUtilities {
     return true;
   }
 
-  public static exists(itemType: 'file' | 'directory' | 'any' = 'any',
+  public static exists(itemType: "symbolicLink" | "file" | "directory" | "any" = "any",
     ...paths: Array<string>): boolean {
     const path = this.join(...paths);
     const doesExist = fileSystem.existsSync(path);
 
-    // checks if item type is anything other than 'file' or 'directory'...
-    if (!doesExist || !['file', 'directory'].includes(itemType)) { return doesExist; }
+    // checks if item type is anything other than "symbolicLink", "file" or "directory"...
+    if (!doesExist || !["symbolicLink", "file", "directory"].includes(itemType)) { return doesExist; }
 
     let fileInformation;
 
@@ -61,16 +62,57 @@ export class FileUtilities {
       return false;
     }
 
-    if (itemType === 'file') { return fileInformation.isFile(); }
+    if (itemType === "symbolicLink") { return fileInformation.isSymbolicLink(); }
+    if (itemType === "file") { return fileInformation.isFile(); }
 
     return fileInformation.isDirectory();
+  }
+
+  public static async getAllPathsAsync(
+    itemType: "symbolicLink" | "file" | "directory" | "any" = "any",
+    pattern?: string,
+    shallPerformRecursiveSearch = false,
+    ...directoryPaths: Array<string>): Promise<Array<string>> {
+    const directoryPath = this.join(...directoryPaths);
+
+    // if the directory path belongs to a file, we shall return an empty array...
+    if (this.exists("file", directoryPath)) { return []; }
+
+    pattern = StringUtilities.getDefaultIfUndefinedOrNullOrEmpty(pattern, StringUtilities.getEmptyString(), true);
+
+    const regularExpression = StringUtilities.isEmpty(pattern) ? undefined : new RegExp(pattern!, "i");
+    const paths = await asyncFileSystem.readdir(directoryPath);
+    const filteredPaths: Array<string> = [];
+
+    for (let i = 0; i < paths.length; ++i) {
+      const path = this.join(directoryPath, paths[i]);
+
+      // if a pattern is provided, we shall check if the path matches the pattern...
+      if (typeof regularExpression !== "undefined" && !regularExpression.test(path)) { continue; }
+      // if the item type is "file" but the path does not belong to a file, we shall continue...
+      if (!this.exists(itemType, path)) { continue; }
+
+      // otherwise, we shall add the path to the filtered paths...
+      filteredPaths.push(path);
+
+      // if we don't need to perform recursive search, we shall continue...
+      if (shallPerformRecursiveSearch !== true) { continue; }
+
+      // we shall perform recursive search...
+      const subdirectoryPaths = await this.getAllPathsAsync(itemType, pattern, shallPerformRecursiveSearch, path);
+
+      // adding all the subdirectory paths...
+      filteredPaths.push(...subdirectoryPaths);
+    }
+
+    return filteredPaths;
   }
 
   public static async createDirectoryIfDoesNotExistAsync(
     ...directoryPaths: Array<string>): Promise<void> {
     const directoryPath = this.join(...directoryPaths);
 
-    if (this.exists('any', directoryPath)) { return; }
+    if (this.exists("any", directoryPath)) { return; }
 
     await asyncFileSystem.mkdir(directoryPath, { recursive: true, });
   }
@@ -78,9 +120,9 @@ export class FileUtilities {
   public static async createFileAsync(...filePaths: Array<string>): Promise<void> {
     const filePath = this.join(...filePaths);
 
-    if (this.exists('any', filePath)) { return; }
+    if (this.exists("any", filePath)) { return; }
 
-    await this.writeAsync('', false, filePath);
+    await this.writeAsync("", false, filePath);
   }
 
   public static extractDirectoryPath(...paths: Array<string>): string {
@@ -111,7 +153,7 @@ export class FileUtilities {
    * @returns Sanitized file name that does not contain any unwanted characters.
    */
   public static removeUnwantedFileNameCharacters(
-    fileName: string, replacementCharacter = '_'): string {
+    fileName: string, replacementCharacter = "_"): string {
     const sanitizedPath = fileName
       .replace(new RegExp(UNWANTED_FILE_NAME_CHARACTERS_PATTERN, "g"), replacementCharacter)
       .replace(new RegExp(`${replacementCharacter}+`, "g"), replacementCharacter);
@@ -147,7 +189,7 @@ export class FileUtilities {
 
     // creates directory if does not exist...
     await this.createDirectoryIfDoesNotExistAsync(directoryPath);
-    await asyncFileSystem.writeFile(filePath, data, { flag: shallOverwrite === true ? 'w' : 'a', });
+    await asyncFileSystem.writeFile(filePath, data, { flag: shallOverwrite === true ? "w" : "a", });
   }
 
   public static async writeJsonAsync(data: any,
