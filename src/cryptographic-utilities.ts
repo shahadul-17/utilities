@@ -33,7 +33,8 @@ type EncryptionAlgorithm = "AESCBC128" | "AESCBC192" | "AESCBC256"
   | "AESGCM128" | "AESGCM192" | "AESGCM256"
   | "AESOCB128" | "AESOCB192" | "AESOCB256"
   | "AESCTR128" | "AESCTR192" | "AESCTR256"
-  | "AESOFB128" | "AESOFB192" | "AESOFB256";
+  | "AESOFB128" | "AESOFB192" | "AESOFB256"
+  | "RSA1024" | "RSA2048" | "RSA4096";
 type DerivationResult = {
   key: Buffer,
   initializationVector: Buffer,
@@ -44,6 +45,10 @@ type EncryptionAlgorithmInformation = {
   algorithm: string,
   keyLengthInBytes: number,
   initializationVectorLengthInBytes: number,
+};
+type AsymmetricKeyPair = {
+  publicKey: string,
+  privateKey: string,
 };
 
 export class CryptographicUtilities {
@@ -130,6 +135,21 @@ export class CryptographicUtilities {
     throw new Error("Unsupported symmetric keyed encryption algorithm provided.");
   }
 
+  public static async generateKeyPairAsync(algorithm: EncryptionAlgorithm): Promise<AsymmetricKeyPair> {
+    const algorithmInformation = await this.validateEncryptionAlgorithmAsync(algorithm);
+
+    // if the algorithm is not symmetric keyed encryption algorithm...
+    if (!algorithmInformation.isSymmetricKeyedEncryptionAlgorithm) {
+      // we shall generate RSA key pair...
+      const keyPair = await this.generateAsymmetricKeyPairAsync(algorithmInformation);
+
+      return keyPair;
+    }
+
+    // otherwise, we shall throw error...
+    throw new Error("Unsupported asymmetric keyed encryption algorithm provided.");
+  }
+
   public static async encryptAsync(
     plaintext: string | Buffer,
     encryptionKey: string,
@@ -137,15 +157,39 @@ export class CryptographicUtilities {
     plaintextEncoding?: Encoding,
     ciphertextEncoding?: null | Encoding): Promise<string | Buffer> {
     const algorithmInformation = await this.validateEncryptionAlgorithmAsync(algorithm);
+    const plaintextAsBuffer = await this.validatePlaintextAsync(plaintext, algorithmInformation, plaintextEncoding);
+    // NOTE: IF ENCODING IS NULL, WE SHALL RETURN THE RAW BUFFER...
+    // BUT IF ENCODING IS UNDEFINED, WE SHALL USE THE DEFAULT ENCODING...
+    const _ciphertextEncoding = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
 
+    // if encryption key is not a string...
+    if (!StringUtilities.isString(encryptionKey)) {
+      // we shall set an empty string...
+      encryptionKey = StringUtilities.getEmptyString();
+    }
+
+    // if the algorithm is a symmetric keyed encryption algorithm...
     if (algorithmInformation.isSymmetricKeyedEncryptionAlgorithm) {
-      const ciphertext = await this.encryptUsingAesAsync(plaintext, encryptionKey,
-        algorithmInformation, plaintextEncoding, ciphertextEncoding);
+      const ciphertext = await this.encryptUsingAesAsync(plaintextAsBuffer,
+        encryptionKey, algorithmInformation, _ciphertextEncoding);
 
       return ciphertext;
     }
 
-    return "";
+    // otherwise, for asymmetric keyed encryption algorithm...
+    if (algorithmInformation.algorithm === "rsa") {
+      // if encryption key is not provided...
+      if (StringUtilities.isEmpty(encryptionKey)) {
+        throw new Error("Invalid asymmetric encryption key provided.");
+      }
+
+      const ciphertext = await this.encryptUsingRsaAsync(plaintextAsBuffer,
+        encryptionKey, algorithmInformation, _ciphertextEncoding);
+
+      return ciphertext;
+    }
+
+    throw new Error("Unsupported encryption algorithm provided.");
   }
 
   public static async decryptAsync(
@@ -155,15 +199,39 @@ export class CryptographicUtilities {
     ciphertextEncoding?: Encoding,
     plaintextEncoding?: null | Encoding): Promise<string | Buffer> {
     const algorithmInformation = await this.validateEncryptionAlgorithmAsync(algorithm);
+    const ciphertextAsBuffer = await this.validateCiphertextAsync(ciphertext, algorithmInformation, ciphertextEncoding);
+    // NOTE: IF ENCODING IS NULL, WE SHALL RETURN THE RAW BUFFER...
+    // BUT IF ENCODING IS UNDEFINED, WE SHALL USE THE DEFAULT ENCODING...
+    const _plaintextEncoding = await this.validateEncodingAsync(plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
 
+    // if decryption key is not a string...
+    if (!StringUtilities.isString(decryptionKey)) {
+      // we shall set an empty string...
+      decryptionKey = StringUtilities.getEmptyString();
+    }
+
+    // if the algorithm is a symmetric keyed encryption algorithm...
     if (algorithmInformation.isSymmetricKeyedEncryptionAlgorithm) {
-      const plaintext = await this.decryptUsingAesAsync(ciphertext, decryptionKey,
-        algorithmInformation, ciphertextEncoding, plaintextEncoding);
+      const plaintext = await this.decryptUsingAesAsync(ciphertextAsBuffer, decryptionKey,
+        algorithmInformation, _plaintextEncoding);
 
       return plaintext;
     }
 
-    return "";
+    // otherwise, for asymmetric keyed encryption algorithm...
+    if (algorithmInformation.algorithm === "rsa") {
+      // if decryption key is not provided...
+      if (StringUtilities.isEmpty(decryptionKey)) {
+        throw new Error("Invalid asymmetric decryption key provided.");
+      }
+
+      const plaintext = await this.decryptUsingRsaAsync(ciphertextAsBuffer,
+        decryptionKey, algorithmInformation, _plaintextEncoding);
+
+      return plaintext;
+    }
+
+    throw new Error("Unsupported encryption algorithm provided.");
   }
 
   private static async generateSaltAsync(): Promise<string> {
@@ -240,42 +308,10 @@ export class CryptographicUtilities {
   }
 
   private static async encryptUsingAesAsync(
-    plaintext: string | Buffer,
+    plaintext: Buffer,
     encryptionKey: string,
     algorithmInformation: EncryptionAlgorithmInformation,
-    plaintextEncoding?: Encoding,
-    ciphertextEncoding?: null | Encoding): Promise<string | Buffer> {
-    let plaintextAsBuffer: Buffer;
-
-    if (plaintext instanceof Buffer) {
-      plaintextAsBuffer = plaintext;
-    } else {
-      let encoding: any = await this.validateEncodingAsync(plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
-
-      // if encoding is null...
-      if (StringUtilities.isUndefinedOrNullOrEmpty(encoding, true)) {
-        // we shall set the default plaintext encoding...
-        encoding = DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING;
-      }
-
-      // if plaintext is not a string...
-      if (!StringUtilities.isString(plaintext)) {
-        // we shall set empty string to the plaintext...
-        plaintext = StringUtilities.getEmptyString();
-      }
-
-      plaintextAsBuffer = Buffer.from(plaintext, encoding);
-    }
-
-    // if encryption key is not a string...
-    if (!StringUtilities.isString(encryptionKey)) {
-      // we shall set an empty string...
-      encryptionKey = StringUtilities.getEmptyString();
-    }
-
-    // NOTE: IF ENCODING IS NULL, WE SHALL RETURN THE RAW BUFFER...
-    // BUT IF ENCODING IS UNDEFINED, WE SHALL USE THE DEFAULT ENCODING...
-    const _ciphertextEncoding = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
+    ciphertextEncoding?: string): Promise<string | Buffer> {
     const salt = await this.generateSaltAsync();
     const saltAsBuffer = Buffer.from(salt, AES_SALT_ENCODING);
     const { key, initializationVector, } = await this.deriveKeyAndInitializationVectorAsync(
@@ -294,7 +330,7 @@ export class CryptographicUtilities {
       saltAsBuffer,                         // index 0
       EMPTY_BUFFER,                         // index 1
       EMPTY_BUFFER,                         // index 2
-      cipher.update(plaintextAsBuffer),     // index 3
+      cipher.update(plaintext),             // index 3
       cipher.final(),                       // index 4
     ];
 
@@ -307,52 +343,23 @@ export class CryptographicUtilities {
     const ciphertextAsBuffer = Buffer.concat(bufferList);
 
     // if encoding is undefined, null or empty string, we shall return the raw buffer...
-    if (StringUtilities.isUndefinedOrNullOrEmpty(_ciphertextEncoding, true)) { return ciphertextAsBuffer; }
+    if (StringUtilities.isUndefinedOrNullOrEmpty(ciphertextEncoding, true)) { return ciphertextAsBuffer; }
 
-    return ciphertextAsBuffer.toString(_ciphertextEncoding as any);
+    return ciphertextAsBuffer.toString(ciphertextEncoding as any);
   }
 
   private static async decryptUsingAesAsync(
-    ciphertext: string | Buffer,
+    ciphertext: Buffer,
     decryptionKey: string,
     algorithmInformation: EncryptionAlgorithmInformation,
-    ciphertextEncoding?: Encoding,
-    plaintextEncoding?: null | Encoding): Promise<string | Buffer> {
-    let ciphertextAsBuffer: Buffer;
-
-    if (ciphertext instanceof Buffer) {
-      ciphertextAsBuffer = ciphertext;
-    } else if (StringUtilities.isString(ciphertext)) {
-      let encoding: any = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
-
-      // if encoding is null...
-      if (StringUtilities.isUndefinedOrNullOrEmpty(encoding, true)) {
-        // we shall set the default ciphertext encoding...
-        encoding = DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING;
-      }
-
-      ciphertextAsBuffer = Buffer.from(ciphertext, encoding);
-    } else {
-      throw new Error("Invalid data provided as ciphertext.");
-    }
-
-    // if decryption key is not a string...
-    if (!StringUtilities.isString(decryptionKey)) {
-      // we shall set an empty string...
-      decryptionKey = StringUtilities.getEmptyString();
-    }
-
-    // NOTE: IF ENCODING IS NULL, WE SHALL RETURN THE RAW BUFFER...
-    // BUT IF ENCODING IS UNDEFINED, WE SHALL USE THE DEFAULT ENCODING...
-    const _plaintextEncoding = await this.validateEncodingAsync(
-      plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
+    plaintextEncoding?: string): Promise<string | Buffer> {
     let totalBytesReadFromCiphertextAsBuffer = 0;
-    const saltAsBuffer = ciphertextAsBuffer.subarray(0, AES_SALT_LENGTH);
+    const saltAsBuffer = ciphertext.subarray(0, AES_SALT_LENGTH);
     const salt = saltAsBuffer.toString(AES_SALT_ENCODING);
     // keeping track of the number of bytes read from the buffer...
     totalBytesReadFromCiphertextAsBuffer += saltAsBuffer.length;
     // extracting authentication tag length...
-    const authenticationTagLengthAsBuffer = ciphertextAsBuffer.subarray(
+    const authenticationTagLengthAsBuffer = ciphertext.subarray(
       totalBytesReadFromCiphertextAsBuffer,
       totalBytesReadFromCiphertextAsBuffer + AES_AUTHENTICATION_TAG_LENGTH_SIZE_IN_BYTES);
     // keeping track of the number of bytes read from the buffer...
@@ -375,7 +382,7 @@ export class CryptographicUtilities {
     // if authentication tag length is not zero...
     if (authenticationTagLength > 0) {
       // we shall read the authentication tag...
-      const authenticationTag = ciphertextAsBuffer.subarray(
+      const authenticationTag = ciphertext.subarray(
         totalBytesReadFromCiphertextAsBuffer,
         totalBytesReadFromCiphertextAsBuffer + authenticationTagLength);
       // keeping track of the number of bytes read from the buffer...
@@ -386,17 +393,86 @@ export class CryptographicUtilities {
     }
 
     // now we'll need to process the rest of the bytes...
-    ciphertextAsBuffer = ciphertextAsBuffer.subarray(totalBytesReadFromCiphertextAsBuffer);
+    ciphertext = ciphertext.subarray(totalBytesReadFromCiphertextAsBuffer);
     // now we shall concatenate the buffers...
     const plaintextAsBuffer = Buffer.concat([
-      decipher.update(ciphertextAsBuffer),
+      decipher.update(ciphertext),
       decipher.final(),
     ]);
 
     // if encoding is undefined, null or empty string, we shall return the raw buffer...
-    if (StringUtilities.isUndefinedOrNullOrEmpty(_plaintextEncoding, true)) { return plaintextAsBuffer; }
+    if (StringUtilities.isUndefinedOrNullOrEmpty(plaintextEncoding, true)) { return plaintextAsBuffer; }
 
-    return plaintextAsBuffer.toString(_plaintextEncoding as any);
+    return plaintextAsBuffer.toString(plaintextEncoding as any);
+  }
+
+  private static generateRsaKeyPairAsync(algorithmInformation: EncryptionAlgorithmInformation): Promise<AsymmetricKeyPair> {
+    return new Promise<AsymmetricKeyPair>((resolve, reject) => {
+      const rsaKeyPairOptions: cryptography.RSAKeyPairOptions<"pem", "pem"> = {
+        // modulus length is in bits...
+        modulusLength: algorithmInformation.keyLengthInBytes * 8,
+        publicKeyEncoding: {
+          type: "pkcs1",
+          format: "pem",
+        },
+        privateKeyEncoding: {
+          type: "pkcs8",
+          format: "pem",
+          // cipher: "aes-256-cbc",
+          // passphrase: "b8ab#4zf9hc44f2@2b573e7324142fe6b0d!dbe$",
+        },
+      };
+
+      cryptography.generateKeyPair(algorithmInformation.algorithm as any, rsaKeyPairOptions,
+        (error: null | Error, publicKey: string, privateKey: string) => {
+          if (error) { return reject(error); }
+
+          resolve({
+            publicKey: publicKey,
+            privateKey: privateKey,
+          });
+        });
+    });
+  };
+
+  private static generateAsymmetricKeyPairAsync(algorithmInformation: EncryptionAlgorithmInformation): Promise<AsymmetricKeyPair> {
+    if (algorithmInformation.algorithm === "rsa") {
+      return this.generateRsaKeyPairAsync(algorithmInformation);
+    }
+
+    // otherwise, we shall throw error...
+    throw new Error("Unsupported asymmetric keyed encryption algorithm provided.");
+  }
+
+  private static async encryptUsingRsaAsync(
+    plaintext: Buffer,
+    encryptionKey: string,
+    algorithmInformation: EncryptionAlgorithmInformation,
+    ciphertextEncoding?: string): Promise<string | Buffer> {
+    const ciphertextAsBuffer = cryptography.publicEncrypt(encryptionKey, plaintext);
+
+    // if encoding is undefined, null or empty string, we shall return the raw buffer...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(ciphertextEncoding, true)) { return ciphertextAsBuffer; }
+
+    return ciphertextAsBuffer.toString(ciphertextEncoding as any);
+  }
+
+  private static async decryptUsingRsaAsync(
+    ciphertext: Buffer,
+    decryptionKey: string,
+    algorithmInformation: EncryptionAlgorithmInformation,
+    plaintextEncoding?: string): Promise<string | Buffer> {
+    const plaintextAsBuffer = cryptography.privateDecrypt({
+      key: decryptionKey,
+      padding: cryptography.constants.RSA_PKCS1_OAEP_PADDING,
+      // oaepHash: "sha256",
+      // passphrase: "b8ab#4zf9hc44f2@2b573e7324142fe6b0d!dbe$",
+    }, ciphertext);
+
+    // if encoding is undefined, null or empty string, we shall return the raw buffer...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(plaintextEncoding, true)) { return plaintextAsBuffer; }
+
+    return plaintextAsBuffer.toString(plaintextEncoding as any);
   }
 
   private static async validateEncodingAsync(encoding: undefined | null | Encoding,
@@ -664,10 +740,84 @@ export class CryptographicUtilities {
         information.shallSetAdditionalAuthenticatedData = false;
 
         break;
+      case "RSA1024":
+        information.algorithm = "rsa";
+        information.keyLengthInBytes = 128;    // 1024 bits...
+        information.initializationVectorLengthInBytes = 0;
+        information.isSymmetricKeyedEncryptionAlgorithm = false;
+        information.shallSetAdditionalAuthenticatedData = false;
+
+        break;
+      case "RSA2048":
+        information.algorithm = "rsa";
+        information.keyLengthInBytes = 256;     // 2048 bits...
+        information.initializationVectorLengthInBytes = 0;
+        information.isSymmetricKeyedEncryptionAlgorithm = false;
+        information.shallSetAdditionalAuthenticatedData = false;
+
+        break;
+      case "RSA4096":
+        information.algorithm = "rsa";
+        information.keyLengthInBytes = 512;     // 4096 bits...
+        information.initializationVectorLengthInBytes = 0;
+        information.isSymmetricKeyedEncryptionAlgorithm = false;
+        information.shallSetAdditionalAuthenticatedData = false;
+
+        break;
       default:
         throw new Error("Invalid symmetric keyed encryption algorithm provided.");
     }
 
     return information;
+  }
+
+  private static async validatePlaintextAsync(
+    plaintext: string | Buffer,
+    algorithmInformation: EncryptionAlgorithmInformation,
+    plaintextEncoding?: Encoding): Promise<Buffer> {
+    // if plaintext is already a buffer, we shall return the plaintext as-is...
+    if (plaintext instanceof Buffer) { return plaintext; }
+
+    let encoding: any = await this.validateEncodingAsync(plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
+
+    // if encoding is null...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(encoding, true)) {
+      // we shall set the default plaintext encoding...
+      encoding = DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING;
+    }
+
+    // if plaintext is not a string...
+    if (!StringUtilities.isString(plaintext)) {
+      // we shall set empty string to the plaintext...
+      plaintext = StringUtilities.getEmptyString();
+    }
+
+    const plaintextAsBuffer = Buffer.from(plaintext, encoding);
+
+    return plaintextAsBuffer;
+  }
+
+  private static async validateCiphertextAsync(
+    ciphertext: string | Buffer,
+    algorithmInformation: EncryptionAlgorithmInformation,
+    ciphertextEncoding?: Encoding): Promise<Buffer> {
+    // if ciphertext is already a buffer, we shall return the ciphertext as-is...
+    if (ciphertext instanceof Buffer) { return ciphertext; }
+    // if ciphertext is not provided...
+    if (!StringUtilities.isString(ciphertext)) {
+      throw new Error("Invalid ciphertext provided.");
+    }
+
+    let encoding: any = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
+
+    // if encoding is null...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(encoding, true)) {
+      // we shall set the default ciphertext encoding...
+      encoding = DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING;
+    }
+
+    const ciphertextAsBuffer = Buffer.from(ciphertext, encoding);
+
+    return ciphertextAsBuffer;
   }
 }
