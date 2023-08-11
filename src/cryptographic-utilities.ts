@@ -2,6 +2,7 @@ import cryptography from "crypto";
 import { RandomGenerator } from "@shahadul-17/random-generator";
 import { StringUtilities } from "./string-utilities";
 
+const INTEGER_SIZE_IN_BYTES = 4;
 const EMPTY_BUFFER = Buffer.from([]);
 
 const DEFAULT_HASH_ENCODING = "base64url";
@@ -12,7 +13,6 @@ const DEFAULT_KEYED_HASH_ALGORITHM = "HMACSHA512";
 const AES_SALT_LENGTH = 64;
 const AES_KEY_LENGTH = 128;
 const AES_SALT_ENCODING = "ascii";
-const AES_AUTHENTICATION_TAG_LENGTH_SIZE_IN_BYTES = 4;
 const AES_AUTHENTICATION_TAG_LENGTH = 16;
 const AES_ADDITIONAL_AUTHENTICATED_DATA_AS_STRING =
   "2591a4f1a5f006fb1b62bb2318f47c020c517131016256e0ef859e073d075338b02d5173614b94c66d04b9f0b7f3e96cb9afbbd6808c5ccecfe5fe95a822db42";
@@ -20,6 +20,10 @@ const AES_ADDITIONAL_AUTHENTICATED_DATA = Buffer.from(AES_ADDITIONAL_AUTHENTICAT
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVATION_HASH_ENCODING = "hex";
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVATION_HASH_ALGORITHM = "SHA512";
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVED_DATA_ENCODING = "ascii";
+
+const DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEY_ENCODING = "ascii";
+const DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEYED_ENCRYPTION_ALGORITHM = "AESGCM256";
+const DEFAULT_HYBRID_ENCRYPTION_ASYMMETRIC_KEYED_ENCRYPTION_ALGORITHM = "RSA4096";
 
 const DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING = "utf-8";
 const DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING = "base64url";
@@ -234,6 +238,122 @@ export class CryptographicUtilities {
     throw new Error("Unsupported encryption algorithm provided.");
   }
 
+  public static async encryptHybridAsync(
+    plaintext: string | Buffer,
+    asymmetricEncryptionKey: string,
+    asymmetricKeyedEncryptionAlgorithm?: EncryptionAlgorithm,
+    symmetricKeyedEncryptionAlgorithm?: EncryptionAlgorithm,
+    plaintextEncoding?: Encoding,
+    ciphertextEncoding?: null | Encoding,
+    symmetricKey?: string): Promise<string | Buffer> {
+    try {
+      await this.validateEncryptionAlgorithmAsync(asymmetricKeyedEncryptionAlgorithm as any);
+    } catch {
+      asymmetricKeyedEncryptionAlgorithm = DEFAULT_HYBRID_ENCRYPTION_ASYMMETRIC_KEYED_ENCRYPTION_ALGORITHM;
+    }
+
+    if (StringUtilities.isUndefinedOrNullOrEmpty(asymmetricEncryptionKey, true)) {
+      throw new Error("Invalid asymmetric encryption key provided.");
+    }
+
+    try {
+      await this.validateEncryptionAlgorithmAsync(symmetricKeyedEncryptionAlgorithm as any);
+    } catch {
+      symmetricKeyedEncryptionAlgorithm = DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEYED_ENCRYPTION_ALGORITHM;
+    }
+
+    let _plaintextEncoding = await this.validateEncodingAsync(plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
+
+    // if no encoding is provided, we shall set to default value...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(_plaintextEncoding, true)) {
+      _plaintextEncoding = DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING;
+    }
+
+    const _ciphertextEncoding = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
+
+    // if symmetric key is not provided...
+    if (!StringUtilities.isString(symmetricKey)) {
+      // we shall generate a new one...
+      symmetricKey = await this.generateKeyAsync(symmetricKeyedEncryptionAlgorithm as any);
+    }
+
+    // first we shall encrypt the plaintext using symmetric keyed encryption algorithm...
+    const encryptedPlaintext = await this.encryptAsync(plaintext, symmetricKey!,
+      symmetricKeyedEncryptionAlgorithm as any, _plaintextEncoding as any, null) as Buffer;
+    // now we shall encrypt the symmetric key using asymmetric keyed encryption algorithm...
+    const encryptedSymmetricKey = await this.encryptAsync(symmetricKey!, asymmetricEncryptionKey,
+      asymmetricKeyedEncryptionAlgorithm as any, DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEY_ENCODING, null) as Buffer;
+    const encryptedSymmetricKeyLengthAsBuffer = Buffer.allocUnsafe(INTEGER_SIZE_IN_BYTES);
+    encryptedSymmetricKeyLengthAsBuffer.writeInt32LE(encryptedSymmetricKey.length);
+    const ciphertextAsBuffer = Buffer.concat([
+      encryptedSymmetricKeyLengthAsBuffer,
+      encryptedSymmetricKey,
+      encryptedPlaintext,
+    ]);
+
+    // if encoding is undefined, null or empty string, we shall return the raw buffer...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(_ciphertextEncoding, true)) { return ciphertextAsBuffer; }
+
+    return ciphertextAsBuffer.toString(_ciphertextEncoding as any);
+  }
+
+  public static async decryptHybridAsync(
+    ciphertext: string | Buffer,
+    asymmetricDecryptionKey: string,
+    asymmetricKeyedEncryptionAlgorithm?: EncryptionAlgorithm,
+    symmetricKeyedEncryptionAlgorithm?: EncryptionAlgorithm,
+    ciphertextEncoding?: Encoding,
+    plaintextEncoding?: null | Encoding): Promise<string | Buffer> {
+    try {
+      await this.validateEncryptionAlgorithmAsync(asymmetricKeyedEncryptionAlgorithm as any);
+    } catch {
+      asymmetricKeyedEncryptionAlgorithm = DEFAULT_HYBRID_ENCRYPTION_ASYMMETRIC_KEYED_ENCRYPTION_ALGORITHM;
+    }
+
+    if (StringUtilities.isUndefinedOrNullOrEmpty(asymmetricDecryptionKey, true)) {
+      throw new Error("Invalid asymmetric decryption key provided.");
+    }
+
+    try {
+      await this.validateEncryptionAlgorithmAsync(symmetricKeyedEncryptionAlgorithm as any);
+    } catch {
+      symmetricKeyedEncryptionAlgorithm = DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEYED_ENCRYPTION_ALGORITHM;
+    }
+
+    let _ciphertextEncoding = await this.validateEncodingAsync(ciphertextEncoding, DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING);
+
+    // if no encoding is provided, we shall set to default value...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(_ciphertextEncoding, true)) {
+      _ciphertextEncoding = DEFAULT_CIPHERTEXT_ENCRYPTION_ENCODING;
+    }
+
+    const _plaintextEncoding = await this.validateEncodingAsync(plaintextEncoding, DEFAULT_PLAINTEXT_ENCRYPTION_ENCODING);
+    let totalBytesReadFromCiphertextAsBuffer = 0;
+    // converts the ciphertext to buffer if needed...
+    let ciphertextAsBuffer = ciphertext instanceof Buffer
+      ? ciphertext
+      : Buffer.from(ciphertext, _ciphertextEncoding as any);
+    const encryptedSymmetricKeyLengthAsBuffer = ciphertextAsBuffer.subarray(0, INTEGER_SIZE_IN_BYTES);
+    const encryptedSymmetricKeyLength = encryptedSymmetricKeyLengthAsBuffer.readInt32LE(0);
+    totalBytesReadFromCiphertextAsBuffer += encryptedSymmetricKeyLengthAsBuffer.length;
+    const encryptedSymmetricKeyAsBuffer = ciphertextAsBuffer.subarray(totalBytesReadFromCiphertextAsBuffer,
+      totalBytesReadFromCiphertextAsBuffer + encryptedSymmetricKeyLength);
+    totalBytesReadFromCiphertextAsBuffer += encryptedSymmetricKeyAsBuffer.length;
+    // now we'll need to process the rest of the bytes...
+    ciphertextAsBuffer = ciphertextAsBuffer.subarray(totalBytesReadFromCiphertextAsBuffer);
+    // now we shall decrypt the symmetric key...
+    const symmetricKey = await this.decryptAsync(encryptedSymmetricKeyAsBuffer, asymmetricDecryptionKey,
+      asymmetricKeyedEncryptionAlgorithm as any, undefined, DEFAULT_HYBRID_ENCRYPTION_SYMMETRIC_KEY_ENCODING) as string;
+    // finally we will decrypt the ciphertext using symmetric keyed encryption algorithm...
+    const decryptedCiphertext = await this.decryptAsync(ciphertextAsBuffer, symmetricKey,
+      symmetricKeyedEncryptionAlgorithm as any, undefined, null) as Buffer;
+
+    // if encoding is undefined, null or empty string, we shall return the raw buffer...
+    if (StringUtilities.isUndefinedOrNullOrEmpty(_plaintextEncoding, true)) { return decryptedCiphertext; }
+
+    return decryptedCiphertext.toString(_plaintextEncoding as any);
+  }
+
   private static async generateSaltAsync(): Promise<string> {
     let arbitraryNumberAsString = `${(Date.now() % 8192)}`;
 
@@ -336,7 +456,7 @@ export class CryptographicUtilities {
 
     // retrieves the authentication tag...
     const authenticationTag = await this.getAuthenticationTagAsync(cipher);
-    const authenticationTagLengthAsBuffer = Buffer.allocUnsafe(AES_AUTHENTICATION_TAG_LENGTH_SIZE_IN_BYTES);
+    const authenticationTagLengthAsBuffer = Buffer.allocUnsafe(INTEGER_SIZE_IN_BYTES);
     authenticationTagLengthAsBuffer.writeInt32LE(authenticationTag.length);
     bufferList[1] = authenticationTagLengthAsBuffer;
     bufferList[2] = authenticationTag;
@@ -361,7 +481,7 @@ export class CryptographicUtilities {
     // extracting authentication tag length...
     const authenticationTagLengthAsBuffer = ciphertext.subarray(
       totalBytesReadFromCiphertextAsBuffer,
-      totalBytesReadFromCiphertextAsBuffer + AES_AUTHENTICATION_TAG_LENGTH_SIZE_IN_BYTES);
+      totalBytesReadFromCiphertextAsBuffer + INTEGER_SIZE_IN_BYTES);
     // keeping track of the number of bytes read from the buffer...
     totalBytesReadFromCiphertextAsBuffer += authenticationTagLengthAsBuffer.length;
     // converts 4 bytes buffer into an integer number...
