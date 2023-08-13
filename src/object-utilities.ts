@@ -75,7 +75,7 @@ export class ObjectUtilities {
     return sanitizedData;
   }
 
-  public static sanitizeObjects(options: SanitizationOptions) {
+  private static sanitizeObjects(options: SanitizationOptions) {
     const temporaryOptions: SanitizationOptions = {
       data: undefined,
       shallDeepSanitize: options.shallDeepSanitize,
