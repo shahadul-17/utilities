@@ -48,17 +48,29 @@ export class ThreadUtilities {
    */
   public static async waitAsync(callback?: WaitCancellationCallback,
     sleepTimeoutInMilliseconds?: number): Promise<void> {
-    let shallCancel = await this.executeWaitCancellationCallbackAsync(callback);
+    return new Promise<void>(async resolve => {
+      let shallCancel = await this.executeWaitCancellationCallbackAsync(callback);
 
-    if (!NumberUtilities.isPositiveNumber(sleepTimeoutInMilliseconds)) {
-      sleepTimeoutInMilliseconds = DEFAULT_WAITING_THREAD_SLEEP_TIMEOUT_IN_MILLISECONDS;
-    }
+      // checks if the thread shall break out of the waiting state immediately...
+      if (shallCancel) { return resolve(); }
+      // if the provided sleep timeout is not a positive number...
+      if (!NumberUtilities.isPositiveNumber(sleepTimeoutInMilliseconds)) {
+        // we shall set the default value...
+        sleepTimeoutInMilliseconds = DEFAULT_WAITING_THREAD_SLEEP_TIMEOUT_IN_MILLISECONDS;
+      }
 
-    while (!shallCancel) {
-      // suspends the waiting thread for a certain time...
-      await this.sleepAsync(sleepTimeoutInMilliseconds!);
-      // checks if waiting shall be cancelled...
-      shallCancel = await this.executeWaitCancellationCallbackAsync(callback);
-    }
+      const interval = setInterval(async () => {
+        // checks if the thread shall break out of the waiting state...
+        shallCancel = await this.executeWaitCancellationCallbackAsync(callback);
+
+        // if the thread shall not break out of the waiting state, we shall return...
+        if (!shallCancel) { return; }
+
+        // otherwise we shall clear the interval to stop waiting...
+        clearInterval(interval);
+        // resolves the promise...
+        resolve();
+      }, sleepTimeoutInMilliseconds);
+    });
   }
 }

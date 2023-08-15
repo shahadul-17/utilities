@@ -1,4 +1,5 @@
 import { NumberUtilities } from "./number-utilities";
+import { ObjectUtilities } from "./object-utilities";
 import { StringUtilities } from "./string-utilities";
 
 const DAY_NAMES = [
@@ -26,7 +27,7 @@ const MONTH_NAMES = [
   'December',
 ];
 
-type DateFormatCallbackParameter = {
+type DateProperties = {
   hoursIn12hFormat: string,
   hoursIn24hFormat: string,
   minutes: string,
@@ -42,7 +43,7 @@ type DateFormatCallbackParameter = {
   year: string,
 };
 
-type DateFormatCallback = (parameter: DateFormatCallbackParameter) => string;
+type DateFormatCallback = (properties: DateProperties) => string;
 
 export class DateUtilities {
 
@@ -64,12 +65,10 @@ export class DateUtilities {
     return monthName.substring(0, 3);
   }
 
-  public static formatDate(date: Date, callback: DateFormatCallback): string {
-    // if date is not an instance of the Date class or no callback is provided,
+  public static extractDateProperties(date: Date): undefined | DateProperties {
+    // if date is not an instance of the Date class,
     // we shall return an empty string...
-    if (!(date instanceof Date) || typeof callback !== "function") {
-      return StringUtilities.getEmptyString();
-    }
+    if (!(date instanceof Date)) { return undefined; }
 
     let hours = date.getHours();
     const hoursIn24hFormat = NumberUtilities.ensureDoubleDigit(hours);
@@ -93,8 +92,8 @@ export class DateUtilities {
     const monthName = this.getMonthName(date.getMonth());
     const shortMonthName = this.getShortMonthName(date.getMonth());
     const year = date.getFullYear();
-    // actual formatting is done by the callback function...
-    let formattedDate = callback({
+
+    return {
       hoursIn12hFormat,
       hoursIn24hFormat,
       minutes,
@@ -108,8 +107,16 @@ export class DateUtilities {
       monthName,
       shortMonthName,
       year: `${year}`,
-    });
+    };
+  }
 
+  public static formatDate(date: Date, callback: DateFormatCallback): string {
+    const dateProperties = this.extractDateProperties(date);
+
+    if (!ObjectUtilities.isObject(dateProperties)) { return StringUtilities.getEmptyString(); }
+
+    // actual formatting is done by the callback function...
+    let formattedDate = callback(dateProperties!);
     formattedDate = StringUtilities.getDefaultIfUndefinedOrNullOrEmpty(
       formattedDate, StringUtilities.getEmptyString(), true);
 
