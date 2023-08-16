@@ -1,6 +1,6 @@
 {
   "name": "@shahadul-17/utilities",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "A collection of utilities for Node.js",
   "author": "Md. Shahadul Alam Patwary",
   "license": "MIT",
@@ -28,6 +28,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
+    "@shahadul-17/collections": "^0.0.2",
     "@shahadul-17/random-generator": "^0.0.1"
   }
 }
