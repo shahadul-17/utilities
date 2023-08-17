@@ -27,7 +27,7 @@ const MONTH_NAMES = [
   'December',
 ];
 
-export type DateProperties = {
+type DateProperties = {
   hoursIn12hFormat: string,
   hoursIn24hFormat: string,
   minutes: string,
@@ -43,7 +43,7 @@ export type DateProperties = {
   year: string,
 };
 
-export type DateFormatCallback = (properties: DateProperties) => string;
+type DateFormatCallback = (properties: DateProperties) => string;
 
 export class DateUtilities {
 
