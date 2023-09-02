@@ -1,5 +1,6 @@
 import { IMap, Map, } from "@shahadul-17/collections";
 import { StringUtilities } from "./string-utilities";
+import { ObjectUtilities } from "./object-utilities";
 
 const ARGUMENT_NAME_PREFIX = "--";
 
@@ -35,22 +36,35 @@ export class ArgumentsParser {
   /**
    * Retrieves command-line argument value by name.
    * @param argumentName Command-line argument name.
+   * @param defaultValue Default value is returned if
+   * the specified argument is not available.
    * @returns Command-line argument value.
    */
-  public static getArgument(argumentName: string): string {
+  public static getArgument(argumentName: string, defaultValue = StringUtilities.getEmptyString()): string {
     const argumentValue = this.argumentsMap.get(argumentName);
 
-    return StringUtilities.getDefaultIfUndefinedOrNull(argumentValue);
+    return StringUtilities.getDefaultIfUndefinedOrNull(argumentValue, defaultValue);
   }
 
-  public static getArguments(): Record<string, string> {
+  public static toObject(): Record<string, string> {
     const entries = this.argumentsMap.entries();
-    const _arguments: Record<string, string> = Object.create(null);
+    const argumentsAsObject: Record<string, string> = ObjectUtilities.getEmptyObject(true);
 
     for (const { key, value, } of entries) {
-      _arguments[key] = value;
+      argumentsAsObject[key] = value;
     }
 
-    return _arguments;
+    return argumentsAsObject;
+  }
+
+  public static toMap(): IMap<string, string> {
+    const entries = this.argumentsMap.entries();
+    const argumentsAsMap: IMap<string, string> = new Map<string, string>();
+
+    for (const { key, value, } of entries) {
+      argumentsAsMap.set(key, value);
+    }
+
+    return argumentsAsMap;
   }
 }
