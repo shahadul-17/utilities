@@ -46,7 +46,9 @@ export class StreamReader implements IStreamReader {
   }
 
   readObject<Type>(): undefined | Type {
-    const line = this.readLine();
+    let line = this.readLine();
+    line = StringUtilities.getDefaultIfUndefinedOrNullOrEmpty(
+      line, StringUtilities.getEmptyString(), true);
 
     if (StringUtilities.isEmpty(line) || !StringUtilities.isJson(line)) { return undefined; }
 
