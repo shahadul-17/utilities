@@ -8,7 +8,35 @@ export class NumberUtilities {
    * @returns True if the value is of type number. Otherwise false.
    */
   public static isNumber(value: any): boolean {
-    return typeof value === "number" && !isNaN(value);
+    // if the type of the value is any of the following types,
+    // we shall return false...
+    if (["undefined", "boolean", "symbol", "object", "function"].includes(typeof value)) {
+      return false;
+    }
+
+    // if the type of the value is string or big integer,
+    // we shall convert the value to a number...
+    if (StringUtilities.isString(value) || typeof value === "bigint") {
+      value = Number(value);
+    }
+
+    return !isNaN(value);
+  }
+
+  public static getIntegerOrDefault(value: any, defaultValue: any = undefined): any {
+    const valueAsNumber = this.getNumberOrDefault(value, defaultValue);
+
+    if (valueAsNumber === defaultValue) { return defaultValue; }
+
+    return parseInt(valueAsNumber);
+  }
+
+  public static getNumberOrDefault(value: any, defaultValue: any = undefined): any {
+    // if the value is not a number, returns the default value...
+    if (!this.isNumber(value)) { return defaultValue; }
+
+    // otherwise, we shall convert the value to number and return that...
+    return Number(value);
   }
 
   /**
@@ -17,7 +45,11 @@ export class NumberUtilities {
    * @returns True if the value is a positive number. Otherwise false.
    */
   public static isPositiveNumber(value: any): boolean {
-    return this.isNumber(value) && value > 0;
+    const valueAsNumber = this.getNumberOrDefault(value, undefined);
+
+    if (typeof valueAsNumber === 'undefined') { return false; }
+
+    return valueAsNumber > 0;
   }
 
   /**
@@ -26,7 +58,11 @@ export class NumberUtilities {
    * @returns True if the value is a negative number. Otherwise false.
    */
   public static isNegativeNumber(value: any): boolean {
-    return this.isNumber(value) && value < 0;
+    const valueAsNumber = this.getNumberOrDefault(value, undefined);
+
+    if (typeof valueAsNumber === 'undefined') { return false; }
+
+    return valueAsNumber < 0;
   }
 
   /**
@@ -35,7 +71,11 @@ export class NumberUtilities {
    * @returns True if the value is not zero. Otherwise false.
    */
   public static isNonZeroNumber(value: any): boolean {
-    return this.isNumber(value) && value !== 0;
+    const valueAsNumber = this.getNumberOrDefault(value, undefined);
+
+    if (typeof valueAsNumber === 'undefined') { return false; }
+
+    return valueAsNumber !== 0;
   }
 
   /**
@@ -45,21 +85,12 @@ export class NumberUtilities {
    * @returns Double digit number.
    */
   public static ensureDoubleDigit(value: any): string {
-    let valueAsNumber: number = 0;
+    // gets the value as number if it is actually a number.
+    // otherwise, returns undefined...
+    let valueAsNumber = this.getNumberOrDefault(value, undefined);
 
-    // checks if the value is of type string...
-    if (StringUtilities.isString(value)) {
-      valueAsNumber = Number(value);
-
-      // if the value is not actually a number, we'll return a default value...
-      if (!this.isNumber(valueAsNumber)) { return '00'; }
-    }
-    // checks if the value is actually a number...
-    else if (this.isNumber(value)) {
-      valueAsNumber = value as number;
-    }
-    // otherwise, if the value is not actually a number, we'll return a default value...
-    else { return '00'; }
+    // if value (as number) is undefined, we'll return a default value...
+    if (typeof valueAsNumber === 'undefined') { return '00'; }
 
     const isNegativeNumber = this.isNegativeNumber(valueAsNumber);
 
@@ -67,7 +98,7 @@ export class NumberUtilities {
     if (isNegativeNumber) { valueAsNumber = -valueAsNumber; }
 
     // if the value is less than 10, we shall add a leading zero...
-    let doubleDigitValue: string = valueAsNumber < 10
+    let doubleDigitValue = valueAsNumber < 10
       ? `0${valueAsNumber}` : `${valueAsNumber}`;
 
     // if the value was initially negative, we shall add the negative sign...
