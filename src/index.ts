@@ -1,4 +1,5 @@
 export * from "./arguments-parser";
+export * from "./unsafe-utilities";
 export * from "./number-utilities";
 export * from "./string-utilities";
 export * from "./object-utilities";
