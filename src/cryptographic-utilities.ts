@@ -1,9 +1,13 @@
 import cryptography from "crypto";
 import { RandomGenerator } from "@shahadul-17/random-generator";
 import { StringUtilities } from "./string-utilities";
+import { UnsafeUtilities } from "./unsafe-utilities";
 
 const INTEGER_SIZE_IN_BYTES = 4;
-const EMPTY_BUFFER = Buffer.from([]);
+const EMPTY_BUFFER = UnsafeUtilities.executeUnsafe({
+  unsafeFunction: () => Buffer.from([]),
+  defaultValue: undefined,
+});
 
 const DEFAULT_HASH_ENCODING = "base64url";
 const DEFAULT_HASH_ALGORITHM = "SHA512";
@@ -16,7 +20,10 @@ const AES_SALT_ENCODING = "ascii";
 const AES_AUTHENTICATION_TAG_LENGTH = 16;
 const AES_ADDITIONAL_AUTHENTICATED_DATA_AS_STRING =
   "2591a4f1a5f006fb1b62bb2318f47c020c517131016256e0ef859e073d075338b02d5173614b94c66d04b9f0b7f3e96cb9afbbd6808c5ccecfe5fe95a822db42";
-const AES_ADDITIONAL_AUTHENTICATED_DATA = Buffer.from(AES_ADDITIONAL_AUTHENTICATED_DATA_AS_STRING, "ascii");
+const AES_ADDITIONAL_AUTHENTICATED_DATA = UnsafeUtilities.executeUnsafe({
+  unsafeFunction: () => Buffer.from(AES_ADDITIONAL_AUTHENTICATED_DATA_AS_STRING, "ascii"),
+  defaultValue: undefined,
+});
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVATION_HASH_ENCODING = "hex";
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVATION_HASH_ALGORITHM = "SHA512";
 const AES_KEY_AND_INITIALIZATION_VECTOR_DERIVED_DATA_ENCODING = "ascii";
@@ -55,6 +62,10 @@ type AsymmetricKeyPair = {
   privateKey: string,
 };
 
+/**
+ * Note: This class will only work in NodeJS environment
+ * because it utilizes the 'crypto' module provided by NodeJS.
+ */
 export class CryptographicUtilities {
 
   public static async computeHashAsync(message: string | Buffer, encoding?: null | Encoding,

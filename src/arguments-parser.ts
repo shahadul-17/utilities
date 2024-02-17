@@ -1,7 +1,7 @@
 import { IMap, Map, } from "@shahadul-17/collections";
 import { StringUtilities } from "./string-utilities";
 import { ObjectUtilities } from "./object-utilities";
-import { UnsafeUtilities } from './unsafe-utilities';
+import { UnsafeUtilities } from "./unsafe-utilities";
 
 const ARGUMENT_NAME_PREFIX = "--";
 
