@@ -1,11 +1,13 @@
 import { ObjectUtilities } from './object-utilities';
 
 type UnsafeFunction = (argument?: any) => any | Promise<any>;
+type UnsafeExecutionErrorCallback = (error: Error) => void | Promise<void>;
 
 type UnsafeExecutionOptions = {
   unsafeFunction: UnsafeFunction,
   unsafeFunctionArgument?: any,
   defaultValue?: any,
+  errorCallback?: UnsafeExecutionErrorCallback,
 };
 
 export class UnsafeUtilities {
@@ -26,7 +28,11 @@ export class UnsafeUtilities {
     try {
       return options!.unsafeFunction(options!.unsafeFunctionArgument);
     } catch (error) {
-      console.error('An error occurred while executing the unsafe function.', error);
+      if (typeof options!.errorCallback === 'function') {
+        try {
+          options!.errorCallback(error as Error);
+        } catch { }
+      }
     }
 
     return options!.defaultValue;
@@ -48,7 +54,11 @@ export class UnsafeUtilities {
     try {
       return await options!.unsafeFunction(options!.unsafeFunctionArgument);
     } catch (error) {
-      console.error('An error occurred while executing the unsafe function.', error);
+      if (typeof options!.errorCallback === 'function') {
+        try {
+          await options!.errorCallback(error as Error);
+        } catch { }
+      }
     }
 
     return options!.defaultValue;
