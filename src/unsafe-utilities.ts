@@ -1,4 +1,4 @@
-import { ObjectUtilities } from './object-utilities';
+import { InternalUtilities } from './internal-utilities';
 
 type UnsafeFunction = (argument?: any) => any | Promise<any>;
 type UnsafeExecutionErrorCallback = (error: Error) => void | Promise<void>;
@@ -13,7 +13,7 @@ type UnsafeExecutionOptions = {
 export class UnsafeUtilities {
 
   public static executeUnsafe(options: UnsafeExecutionOptions): any {
-    if (!ObjectUtilities.isObject(options)) {
+    if (!InternalUtilities.isObject(options)) {
       console.warn('Unsafe execution options not provided.');
 
       return undefined;
@@ -39,7 +39,7 @@ export class UnsafeUtilities {
   }
 
   public static async executeUnsafeAsync(options: UnsafeExecutionOptions): Promise<any> {
-    if (!ObjectUtilities.isObject(options)) {
+    if (!InternalUtilities.isObject(options)) {
       console.warn('Unsafe execution options not provided.');
 
       return undefined;

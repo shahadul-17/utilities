@@ -1,3 +1,4 @@
+import { InternalUtilities } from "./internal-utilities";
 import { StringUtilities } from "./string-utilities";
 
 const EMPTY_OBJECT = Object.freeze(createEmptyObject());
@@ -44,7 +45,7 @@ export class ObjectUtilities {
    * @returns True if the value is an object. Otherwise returns false.
    */
   public static isObject(value: any): boolean {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+    return InternalUtilities.isObject(value);
   }
 
   private static sanitizeObject(options: SanitizationOptions): any {

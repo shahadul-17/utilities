@@ -1,5 +1,13 @@
+import { UnsafeUtilities } from './unsafe-utilities';
+
 const EMPTY_STRING = "";
 const DEFAULT_SEPARATOR = ",";
+const TEXT_ENCODER = UnsafeUtilities.executeUnsafe({
+  unsafeFunction: () => new TextEncoder(),
+});
+const TEXT_DECODER = UnsafeUtilities.executeUnsafe({
+  unsafeFunction: () => new TextDecoder(),
+});
 
 export class StringUtilities {
 
@@ -131,12 +139,93 @@ export class StringUtilities {
    * @param text Text to be checked.
    * @returns Returns true if the text is JSON. Otherwise returns false.
    */
-  public static isJson(text: string) {
+  public static isJson(text: string): boolean {
     const firstCharacter = text.charAt(0);
     const lastCharacter = text.charAt(text.length - 1);
     const isJson = (firstCharacter === '{' && lastCharacter === '}')
       || (firstCharacter === '[' && lastCharacter === ']');
 
     return isJson;
+  }
+
+  /**
+   * Encodes a string into a sequence of bytes.
+   * Note: This method returns undefined if TextEncoder
+   * is not supported by the runtime environment.
+   * @param text Text to encode.
+   * @returns The resultant byte array.
+   */
+  public static getBytes(text: string): undefined | Uint8Array {
+    // if text encoder is not supported...
+    if (typeof TEXT_ENCODER === 'undefined') {
+      // we shall return undefined...
+      return undefined;
+    }
+
+    return TEXT_ENCODER.encode(text);
+  }
+
+  /**
+   * Decodes a sequence of bytes into a string.
+   * Note: This method returns an empty string if TextDecoder
+   * is not supported by the runtime environment.
+   * @param bytes Bytes to decode.
+   * @returns The resultant string.
+   */
+  public static fromBytes(bytes: Uint8Array): string {
+    // if text decoder is not supported...
+    if (typeof TEXT_DECODER === 'undefined') {
+      // we shall return an empty string...
+      return this.getEmptyString();
+    }
+
+    return TEXT_DECODER.decode(bytes);
+  }
+
+  /**
+   * Retrieves the number of bytes in a string.
+   * Note: This method returns zero (0) if TextEncoder
+   * is not supported by the runtime environment.
+   * @param text Text to retrieve byte length.
+   * @returns The length of the string in bytes.
+   */
+  public static getByteLength(text: string): number {
+    const bytes = this.getBytes(text);
+
+    return typeof bytes === 'undefined' ? 0 : bytes.byteLength;
+  }
+
+  /**
+   * Truncates a string.
+   * @param text Text to truncate.
+   * @param length Truncated text length.
+   * @returns The truncated text.
+   */
+  public static truncate(text: string, length: number): string {
+    return text.substring(0, length);
+  }
+
+  /**
+   * Truncates a string by byte length.
+   * Note: This method returns the original text without truncating
+   * if TextEncoder or TextDecoder is not supported by the runtime environment.
+   * @param text Text to truncate.
+   * @param byteLength Truncated text length in bytes.
+   * @returns The truncated text.
+   */
+  public static truncateByByteLength(text: string, byteLength: number): string {
+    const bytes = this.getBytes(text);
+
+    if (typeof bytes === 'undefined') { return text; }
+
+    const slicedByteArray = bytes.slice(0, byteLength);
+    let truncatedString = this.fromBytes(slicedByteArray);
+
+    if (this.isEmpty(truncatedString)) { return text; }
+
+    // removing the last character to avoid corrupted character...
+    truncatedString = truncatedString.substring(0, truncatedString.length - 1);
+
+    return truncatedString;
   }
 }
